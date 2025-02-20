@@ -9,27 +9,12 @@ socket.on('connect', () => {
 	console.log('Connected to server');
 });
 
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+});
+
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+});
+
 export { socket };
-
-// export const socket = browser
-//   ? io('http://localhost:3000')
-//   : null;
-
-// let socket;
-
-// if (browser) {
-//   socket = io('http://localhost:5173'); // Replace with your backend server URL
-// }
-
-// if (socket) {
-//   socket.on('cardUpdated', (data) => {
-//     // Handle card updates
-//     console.log('Card updated:', data);
-//   });
-// }
-
-// function updateCard(cardData) {
-//   if (socket) {
-//     socket.emit('updateCard', cardData);
-//   }
-// }

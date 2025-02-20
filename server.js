@@ -45,12 +45,36 @@ io.on('connection', (socket) => {
         console.log('User disconnected');
     });
 
-    // Add your custom socket events here
-    // Example:
-    // socket.on('custom-event', (data) => {
-    //     console.log('Received:', data);
-    //     io.emit('custom-response', { message: 'Processed data' });
-    // });
+    socket.on('updateCard', (updatedCard, callback) => {
+        try {
+            console.log('Card updated:', updatedCard);
+            
+            // Broadcast the update to all clients except the sender
+            socket.broadcast.emit('cardUpdated', updatedCard);
+            
+            // Send success acknowledgment back to the client
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error updating card:', error);
+            if (callback) callback(error);
+        }
+    });
+
+    // Handle joining specific board rooms
+    socket.on('joinBoard', (boardId) => {
+        socket.join(`board-${boardId}`);
+        console.log(`User joined board: ${boardId}`);
+    });
+
+    // Handle leaving board rooms
+    socket.on('leaveBoard', (boardId) => {
+        socket.leave(`board-${boardId}`);
+        console.log(`User left board: ${boardId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+    });
 });
 
 // Handle SvelteKit SSR

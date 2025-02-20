@@ -11,7 +11,6 @@ export interface Comment {
     column: string;
     tags: string[];
     dueDate: string;
-    assignedTo: string[];
     description: string;
     comments: Comment[];
     versions: any[];

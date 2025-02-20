@@ -1,33 +1,11 @@
 <script lang="ts">
 	import { dndzone } from 'svelte-dnd-action';
+	import Tags from 'svelte-tags-input';
 	import { boards, cards, activeBoard } from '$lib/store.js';
 	import { onMount, onDestroy } from 'svelte';
 	import { socket } from '$lib/socket.js';
-
-	interface Board {
-		id: string;
-		name: string;
-		columns: string[];
-	}
-
-	interface Card {
-		id: string;
-		title: string;
-		board: string;
-		column: string;
-		tags: string[];
-		dueDate: string;
-		assignedTo: string[];
-		description: string;
-		comments: Comment[];
-		versions: any[];
-	}
-
-	interface Comment {
-		author: string;
-		text: string;
-		timestamp: string;
-	}
+	import type { Card, Comment } from '../types/cards';
+	import type { Board } from '../types/board';
 
 	export let boardId: string = $activeBoard;
 	let showModal = false;
@@ -37,6 +15,7 @@
 	let editingTitle = false;
 	let editingDescription = false;
 	let editingDueDate = false;
+	let editingTags = false;
 	let newComment = '';
 
 	$: currentBoard = $boards.find((b: Board) => b.id === boardId);
@@ -56,22 +35,36 @@
 
 	// Socket.IO event handlers
 	onMount(() => {
-		if (socket) {
-			socket.on('cardUpdated', (updatedCard: Card) => {
-				if (updatedCard.board === boardId) {
-					cards.update((allCards) =>
-						allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
-					);
-				}
-			});
-		}
-	});
+    if (socket) {
+        // Join the board room when component mounts
+        socket.emit('joinBoard', boardId);
 
-	onDestroy(() => {
-		if (socket) {
-			socket.off('cardUpdated');
-		}
-	});
+        // Listen for card updates
+        socket.on('cardUpdated', (updatedCard: Card) => {
+            if (updatedCard.board === boardId) {
+                cards.update((allCards) =>
+                    allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
+                );
+            }
+        });
+    }
+});
+
+onDestroy(() => {
+    if (socket) {
+        // Leave the board room when component is destroyed
+        socket.emit('leaveBoard', boardId);
+        socket.off('cardUpdated');
+    }
+});
+
+	function resetEditingState() {
+		editing = false;
+		editingDescription = false;
+		editingDueDate = false;
+		editingTags = false;
+		editingTitle = false;
+	}
 
 	function handleDndConsider(event: CustomEvent<{ items: Card[] }>, targetColumn: string) {
 		const { items } = event.detail;
@@ -93,8 +86,18 @@
 			);
 
 			// Emit socket event for real-time sync
-			if (socket) {
-				socket.emit('updateCard', updatedCard);
+			if (socket?.connected) {
+				socket.emit('updateCard', updatedCard, (error: any) => {
+					if (error) {
+						console.error('Error updating card:', error);
+						// Optionally revert the local state change
+						cards.update((allCards) =>
+							allCards.map((card) => (card.id === movedCard.id ? movedCard : card))
+						);
+					}
+				});
+			} else {
+				console.warn('Socket not connected, update will only be local');
 			}
 		}
 	}
@@ -159,16 +162,6 @@
 										{/each}
 									</div>
 								{/if}
-
-								{#if card.assignedTo.length > 0}
-									<div class="mt-2 flex gap-1">
-										{#each card.assignedTo as user}
-											<span class="text-sm text-gray-600">
-												{user}
-											</span>
-										{/each}
-									</div>
-								{/if}
 							</div>
 						{/each}
 					</div>
@@ -186,17 +179,19 @@
 			<div class="flex items-start justify-between">
 				{#if editingTitle}
 					<input
+						autofocus
 						type="text"
 						bind:value={selectedCard.title}
 						class="rounded border p-1 text-2xl font-bold"
-						on:blur={() => {
-							editingTitle = false;
-							editing = false;
+						on:focusout={() => {
+							if (selectedCard) {
+								resetEditingState();
+								updateCardDetails(selectedCard);
+							}
 						}}
 						on:keydown={(e) => {
 							if (e.key === 'Enter') {
-								editingTitle = false;
-								editing = false;
+								resetEditingState();
 								if (selectedCard) {
 									updateCardDetails(selectedCard);
 								}
@@ -213,10 +208,7 @@
 								editingTitle = true;
 								editing = true;
 							} else {
-								editing = false;
-								editingTitle = false;
-								editingDescription = false;
-								editingDueDate = false;
+								resetEditingState();
 								if (selectedCard) updateCardDetails(selectedCard);
 							}
 						}}
@@ -228,16 +220,12 @@
 					class="text-gray-500 hover:text-gray-700"
 					on:click={() => {
 						if (editing) {
-							editing = false;
-							editingTitle = false;
-							editingDescription = false;
-							editingDueDate = false;
+							resetEditingState();
 							if (selectedCard) updateCardDetails(selectedCard);
 						}
-
 						showModal = false;
 						selectedCard = null;
-						editing = false;
+						resetEditingState();
 						columnCards = { ...columnCards };
 					}}
 				>
@@ -248,16 +236,18 @@
 			<div class="mt-4">
 				{#if editingDescription}
 					<textarea
+						autofocus
 						bind:value={selectedCard.description}
 						class="w-full rounded border p-1"
-						on:blur={() => {
-							editingDescription = false;
-							editing = false;
+						on:focusout={() => {
+							if (selectedCard) {
+								resetEditingState();
+								updateCardDetails(selectedCard);
+							}
 						}}
 						on:keydown={(e) => {
 							if (e.key === 'Enter' && !e.shiftKey && selectedCard) {
-								editingDescription = false;
-								editing = false;
+								resetEditingState();
 								updateCardDetails(selectedCard);
 							}
 						}}
@@ -272,10 +262,7 @@
 								editingDescription = true;
 								editing = true;
 							} else {
-								editing = false;
-								editingTitle = false;
-								editingDescription = false;
-								editingDueDate = false;
+								resetEditingState();
 								if (selectedCard) updateCardDetails(selectedCard);
 							}
 						}}
@@ -288,60 +275,62 @@
 					<h3 class="font-semibold">Due Date</h3>
 					{#if editingDueDate}
 						<input
+							autofocus
 							type="date"
 							bind:value={selectedCard.dueDate}
-							class="rounded border p-1"
-							on:blur={() => {
+							class="inline-block rounded border p-1"
+							on:focusout={() => {
 								if (selectedCard) {
-									editingDueDate = false;
-									editing = false;
+									resetEditingState();
 									updateCardDetails(selectedCard);
 								}
 							}}
 						/>
+						<!-- svelte-ignore a11y_invalid_attribute -->
 					{:else}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 						<p
-							class="cursor-pointer"
+							class="inline-block cursor-pointer"
 							on:click={() => {
 								if (!editing) {
 									editingDueDate = true;
 									editing = true;
 								} else {
-									editing = false;
-									editingTitle = false;
-									editingDescription = false;
-									editingDueDate = false;
+									resetEditingState();
 									if (selectedCard) updateCardDetails(selectedCard);
 								}
 							}}
 						>
-							{new Date(selectedCard.dueDate).toLocaleDateString()}
+							{#if selectedCard.dueDate}
+								{new Date(selectedCard.dueDate).toLocaleDateString()}
+							{:else}
+								<span class="text-stone-500 italic">Click to set due date</span>
+							{/if}
 						</p>
 					{/if}
-				</div>
-
-				<div class="mt-4">
-					<h3 class="font-semibold">Assigned To</h3>
-					<div class="flex gap-2">
-						{#each selectedCard.assignedTo as user}
-							<span class="rounded bg-gray-100 px-2 py-1">
-								{user}
-							</span>
-						{/each}
-					</div>
+					<button
+						class="inline-block underline"
+						on:click={() => {
+							if (selectedCard) {
+								resetEditingState();
+								selectedCard.dueDate = '';
+								updateCardDetails(selectedCard);
+							}
+						}}
+					>
+						Clear
+					</button>
 				</div>
 
 				<div class="mt-4">
 					<h3 class="font-semibold">Tags</h3>
-					<div class="flex flex-wrap gap-2">
-						{#each selectedCard.tags as tag}
-							<span class="rounded-full bg-blue-100 px-2 py-1 text-sm text-blue-800">
-								{tag}
-							</span>
-						{/each}
-					</div>
+					<Tags
+						bind:tags={selectedCard.tags}
+						onTagAdded={() => updateCardDetails(selectedCard)}
+						onTagRemoved={() => updateCardDetails(selectedCard)}
+					></Tags>
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
 				</div>
 
 				<div class="mt-4">
@@ -369,7 +358,7 @@
 									timestamp: new Date().toISOString()
 								};
 								if (selectedCard) {
-									selectedCard.comments = [...selectedCard.comments, comment];
+									selectedCard.comments = [comment, ...selectedCard.comments];
 									newComment = '';
 									updateCardDetails(selectedCard);
 								}
