@@ -1,174 +1,45 @@
 <script lang="ts">
-	import { dndzone } from 'svelte-dnd-action';
-	import { boards, cards, activeBoard } from '$lib/store.js';
-	import { onMount, onDestroy } from 'svelte';
-	import { socket } from '$lib/socket.js';
-	import { goto } from '$app/navigation';
-	import type { Card } from '../types/cards';
-	import type { Board } from '../types/board';
+    import { boards, activeBoard } from '$lib/store.js';
+    import type { Board } from './types/board';
 
-	export let boardId: string = $activeBoard;
-	let columnCards: { [key: string]: Card[] } = {};
-
-	$: currentBoard = $boards.find((b: Board) => b.id === boardId);
-
-	// Update columnCards whenever cards or boardId changes
-	$: {
-		if (currentBoard) {
-			columnCards = currentBoard.columns.reduce(
-				(acc, column) => {
-					acc[column] = $cards.filter((card) => card.board === boardId && card.column === column);
-					return acc;
-				},
-				{} as { [key: string]: Card[] }
-			);
-		}
-	}
-
-	// Socket.IO event handlers
-	onMount(() => {
-		if (socket) {
-			socket.emit('joinBoard', boardId);
-			socket.on('cardUpdated', (updatedCard: Card) => {
-				if (updatedCard.board === boardId) {
-					cards.update((allCards) =>
-						allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
-					);
-				}
-			});
-			socket.on('cardAdded', (newCard: Card) => {
-				if (newCard.board === boardId) {
-					cards.update((allCards) => [...allCards, newCard]);
-				}
-			});
-		}
-	});
-
-	onDestroy(() => {
-		if (socket) {
-			socket.emit('leaveBoard', boardId);
-			socket.off('cardUpdated');
-			socket.off('cardAdded');
-		}
-	});
-
-	function handleDndConsider(event: CustomEvent<{ items: Card[] }>, targetColumn: string) {
-		const { items } = event.detail;
-		columnCards[targetColumn] = items;
-	}
-
-	function handleDndFinalize(event: CustomEvent<{ items: Card[] }>, targetColumn: string) {
-		const { items } = event.detail;
-		columnCards[targetColumn] = items;
-
-		const movedCard = items.find((item) => item.column !== targetColumn);
-		if (movedCard) {
-			const updatedCard: Card = { ...movedCard, column: targetColumn };
-
-			cards.update((allCards) =>
-				allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
-			);
-
-			if (socket?.connected) {
-				socket.emit('updateCard', updatedCard, (error: any) => {
-					if (error) {
-						console.error('Error updating card:', error);
-						cards.update((allCards) =>
-							allCards.map((card) => (card.id === movedCard.id ? movedCard : card))
-						);
-					}
-				});
-			} else {
-				console.warn('Socket not connected, update will only be local');
-			}
-		}
-	}
-
-	function openCard(card: Card) {
-		goto(`/${card.id}`);
-	}
-
-	function createCard(column: string): any {
-		const newCard: Card = {
-			id: crypto.randomUUID(),
-			title: 'New Card',
-			description: '',
-			board: boardId,
-			column: column,
-			tags: [],
-			dueDate: '',
-			comments: [],
-			versions: []
-		};
-
-		cards.update((allCards) => [...allCards, newCard]);
-		if (socket?.connected) {
-			socket.emit('updateCard', newCard);
-		}
-
-		openCard(newCard);
-	}
+    function selectBoard(boardId: string) {
+        activeBoard.set(boardId);
+    }
 </script>
 
 <div class="min-h-screen bg-gray-100 p-6">
-	<h1 class="mb-8 text-3xl font-bold text-gray-800">
-		{currentBoard?.name || 'Kanban Board'}
-	</h1>
+    <h1 class="mb-8 text-3xl font-bold text-gray-800">My Boards</h1>
 
-	{#if currentBoard}
-		<div class="flex gap-6 overflow-x-auto pb-4">
-			{#each currentBoard.columns as column}
-				<div class="flex h-full min-w-[300px] flex-col rounded-lg bg-gray-200 p-4">
-					<h2 class="mb-4 text-lg font-semibold text-gray-700 capitalize">
-						{column.replace('_', ' ')}
-					</h2>
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {#each $boards as board}
+            <a
+                href="/{board.id}"
+                class="block rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg"
+                on:click={() => selectBoard(board.id)}
+            >
+                <h2 class="text-xl font-semibold text-gray-800">{board.name}</h2>
+                <p class="mt-2 text-gray-600">{board.columns.length} columns</p>
+                <p class="mt-1 text-sm text-gray-500">
+                    Created {new Date(board.createdAt).toLocaleDateString()}
+                </p>
+            </a>
+        {/each}
+    </div>
 
-					<div
-						class="flex min-h-15 flex-1 flex-col gap-2"
-						use:dndzone={{
-							items: columnCards[column] || []
-						}}
-						on:consider={(e) => handleDndConsider(e, column)}
-						on:finalize={(e) => handleDndFinalize(e, column)}
-					>
-						{#each columnCards[column] || [] as card (card.id)}
-							<div
-								class="cursor-pointer rounded-md bg-white p-4 shadow transition-shadow hover:shadow-md"
-								on:click={() => openCard(card)}
-								on:keydown={(e) => e.key === 'Enter' && openCard(card)}
-								role="button"
-								tabindex="0"
-							>
-								<h3 class="text-lg font-medium text-gray-800">{card.title}</h3>
-
-								{#if card.dueDate}
-									<p class="mt-2 text-sm text-gray-600">
-										Due: {new Date(card.dueDate).toLocaleDateString()}
-									</p>
-								{/if}
-
-								{#if card.tags.length > 0}
-									<div class="mt-2 flex flex-wrap gap-1">
-										{#each card.tags as tag}
-											<span class="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
-												{tag}
-											</span>
-										{/each}
-									</div>
-								{/if}
-							</div>
-						{/each}
-						<button
-							class="mt-4 w-full rounded-md bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400"
-							on:click={() => createCard(column)}
-						>
-							+ Add Card
-						</button>
-					</div>
-				</div>
-			{/each}
-		</div>
-	{:else}
-		<p class="text-gray-600">Board not found</p>
-	{/if}
+    <!-- Add new board button -->
+    <button
+        class="mt-6 rounded-md bg-blue-500 px-4 py-2 font-medium text-white hover:bg-blue-600"
+        on:click={() => {
+            const newBoard: Board = {
+                id: crypto.randomUUID(),
+                name: 'New Board',
+                columns: ['todo', 'in_progress', 'done'],
+                createdAt: new Date().toISOString()
+            };
+            boards.update(b => [...b, newBoard]);
+            selectBoard(newBoard.id);
+        }}
+    >
+        + Create New Board
+    </button>
 </div>
