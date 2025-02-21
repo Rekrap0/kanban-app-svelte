@@ -1,5 +1,6 @@
 .
 ├── build/
+├── create_database.sql
 ├── eslint.config.js
 ├── jsconfig.json
 ├── node_modules/
@@ -13,18 +14,15 @@
 │   ├── app.html
 │   ├── hooks.server.js
 │   ├── lib/
-│   │   ├── index.js
-│   │   ├── socket.js
-│   │   └── store.js
 │   ├── routes/
 │   │   ├── +layout.svelte
 │   │   └── +page.svelte
 │   └── types/
+│       ├── board.ts
 │       └── cards.ts
-├── static
-│   └── favicon.png
+├── static/
 ├── svelte.config.js
 ├── tailwind.config.js
 └── vite.config.js
 
-962 directories, 5249 files
+969 directories, 5269 files

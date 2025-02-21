@@ -60,6 +60,22 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('newCard', (newCard, callback) => {
+        try {
+            console.log('Card created:', newCard);
+            
+            // Broadcast the update to all clients except the sender
+            socket.broadcast.emit('cardAdded', newCard);
+            
+            // Send success acknowledgment back to the client
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error updating card:', error);
+            if (callback) callback(error);
+        }
+    });
+
+
     // Handle joining specific board rooms
     socket.on('joinBoard', (boardId) => {
         socket.join(`board-${boardId}`);
