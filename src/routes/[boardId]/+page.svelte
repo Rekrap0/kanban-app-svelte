@@ -136,26 +136,49 @@
 			}
 		}
 	}
+
+
+
+
 </script>
 
 <div class="min-h-screen bg-gray-100 p-6">
 	<a href="/" class="text-gray-600 hover:text-gray-800">← Back to Boards</a>
 	<div class="mb-8 flex items-center justify-between">
 		{#if !isDragging}
-			<h1 class="flex h-20 items-center text-3xl font-bold text-gray-800">
-				{currentBoard?.name || 'Kanban Board'}
-			</h1>
+			{#if currentBoard}
+				{#if !editingTitle}
+					<h1 class="flex h-20 items-center text-3xl font-bold text-gray-800" on:click={() => (editingTitle = true)}>
+						{currentBoard.name}
+					</h1>
+				{:else}
+					<input
+						autofocus
+						type="text"
+						bind:value={currentBoard.name}
+						class="rounded flex h-20 items-center text-3xl font-bold text-gray-800"
+						on:focusout={() => {
+							editingTitle = false;
+						}}
+						on:keydown={(e) => {
+							if (e.key === 'Enter') {
+								editingTitle = false;
+							}
+						}}
+					/>
+				{/if}
+			{/if}
 		{:else}
 			<div
 				class="grid h-20 w-full items-center justify-center rounded-lg border-2 border-dashed border-red-300 bg-red-100 transition-colors hover:bg-red-200"
 				use:dndzone={{
 					items: columnCards[''] || [],
-                    centreDraggedOnCursor: false
+					centreDraggedOnCursor: false
 				}}
 				on:consider={(e) => handleDndConsider(e, '')}
 				on:finalize={(e) => handleDndFinalize(e, '')}
 			>
-            <div class="text-red-500 text-center">Delete card</div>
+				<div class="text-center text-red-500">Delete card</div>
 			</div>
 		{/if}
 	</div>
