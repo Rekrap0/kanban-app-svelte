@@ -1,10 +1,30 @@
 <script lang="ts">
+	import { socket } from '$lib/socket';
     import { boards, activeBoard } from '$lib/store.js';
-    import type { Board } from './types/board';
+	import { onMount } from 'svelte';
+    import type { Board } from '../types/board';
 
     function selectBoard(boardId: string) {
         activeBoard.set(boardId);
     }
+
+    function createBoard(board: Board): void {
+		boards.update(b => [...b, board]);
+		if (socket) {
+			socket.emit('createBoard', board);
+		}
+        selectBoard(board.id);
+	}
+
+    onMount(() => {
+		if (socket) {
+			socket.emit('fetchBoards');
+			socket.on('boardsFetched', (b: Board[]) => {
+				boards.set(b);
+                socket.off();
+			});
+		}
+	});
 </script>
 
 <div class="min-h-screen bg-gray-100 p-6">
@@ -19,9 +39,6 @@
             >
                 <h2 class="text-xl font-semibold text-gray-800">{board.name}</h2>
                 <p class="mt-2 text-gray-600">{board.columns.length} columns</p>
-                <p class="mt-1 text-sm text-gray-500">
-                    Created {new Date(board.createdAt).toLocaleDateString()}
-                </p>
             </a>
         {/each}
     </div>
@@ -33,11 +50,9 @@
             const newBoard: Board = {
                 id: crypto.randomUUID(),
                 name: 'New Board',
-                columns: ['todo', 'in_progress', 'done'],
-                createdAt: new Date().toISOString()
+                columns: ['todo', 'in_progress', 'done']
             };
-            boards.update(b => [...b, newBoard]);
-            selectBoard(newBoard.id);
+            createBoard(newBoard)
         }}
     >
         + Create New Board

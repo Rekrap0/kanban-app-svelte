@@ -36,6 +36,14 @@
 	onMount(() => {
 		if (socket) {
 			socket.emit('joinBoard', boardId);
+			socket.on('boardDataReceived', (b: Board, c: Card[]) => {
+				boards.set([b]);
+				cards.set(c);
+				console.log("Received");
+				console.log(b);
+				console.log(c);
+                socket.off();
+			});
 			socket.on('cardUpdated', (updatedCard: Card) => {
 				if (updatedCard.board === boardId) {
 					cards.update((allCards) =>

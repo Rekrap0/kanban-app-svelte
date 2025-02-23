@@ -1,144 +1,178 @@
-import pg from 'pg';
-const { Pool } = pg;
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-const pool = new Pool({
-  user: process.env.POSTGRES_USER,
-  host: process.env.POSTGRES_HOST,
-  database: process.env.POSTGRES_DB,
-  password: process.env.POSTGRES_PASSWORD,
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Helper function to run queries
-/**
- * @param {string | pg.QueryArrayConfig<any>} text
- * @param {any[] | undefined} [params]
- */
-export async function query(text, params) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(text, params);
-    return result;
-  } finally {
-    client.release();
-  }
+// Initialize database
+export async function initializeDB() {
+    const db = await open({
+        filename: path.join(__dirname, '../../data/kanban.db'),
+        driver: sqlite3.Database
+    });
+
+    // Create tables if they don't exist
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS boards (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            columns TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS cards (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            board TEXT NOT NULL,
+            column TEXT NOT NULL,
+            tags TEXT,
+            dueDate TEXT,
+            description TEXT,
+            FOREIGN KEY (board) REFERENCES boards(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cardId TEXT NOT NULL,
+            author TEXT NOT NULL,
+            text TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (cardId) REFERENCES cards(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cardId TEXT NOT NULL,
+            data TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (cardId) REFERENCES cards(id)
+        );
+    `);
+
+    return db;
 }
 
-// Database operations for boards
-export const boardsDb = {
-  /**
-     * @param {string} name
-     */
-  async create(name) {
-    const result = await query(
-      'INSERT INTO boards (name) VALUES ($1) RETURNING *',
-      [name]
-    );
-    return result.rows[0];
-  },
-
-  async getAll() {
-    const result = await query('SELECT * FROM boards ORDER BY created_at DESC');
-    return result.rows;
-  },
-
-  /**
-   * @param {string} id
+// Database operations
+export class KanbanDB {
+    /**
+   * @param {import("sqlite").Database<sqlite3.Database, sqlite3.Statement>} db
    */
-  async getById(id) {
-    const result = await query('SELECT * FROM boards WHERE id = $1', [id]);
-    return result.rows[0];
-  },
-
-  /**
-   * @param {string} id
-   * @param {string} name
-   */
-  async update(id, name) {
-    const result = await query(
-      'UPDATE boards SET name = $1 WHERE id = $2 RETURNING *',
-      [name, id]
-    );
-    return result.rows[0];
-  },
-
-  /**
-   * @param {string} id
-   */
-  async delete(id) {
-    await query('DELETE FROM boards WHERE id = $1', [id]);
-  }
-};
-
-// Database operations for cards
-export const cardsDb = {
-  async create(boardId, columnId, data) {
-    const result = await query(
-      `INSERT INTO cards (
-        board_id, column_id, title, description, position, due_date
-      ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [boardId, columnId, data.title, data.description, data.position, data.dueDate]
-    );
-    return result.rows[0];
-  },
-
-
-  async update(id, data) {
-    const result = await query(
-      `UPDATE cards 
-       SET title = $1, description = $2, position = $3, 
-           due_date = $4, column_id = $5
-       WHERE id = $6 RETURNING *`,
-      [data.title, data.description, data.position, data.dueDate, data.columnId, id]
-    );
-    return result.rows[0];
-  },
-
-  async addVersion(cardId, changes, userId) {
-    await query(
-      'INSERT INTO card_versions (card_id, changes, changed_by) VALUES ($1, $2, $3)',
-      [cardId, changes, userId]
-    );
-  },
-
-  async getVersions(cardId) {
-    const result = await query(
-      'SELECT * FROM card_versions WHERE card_id = $1 ORDER BY created_at DESC',
-      [cardId]
-    );
-    return result.rows;
-  }
-};
-
-// Database operations for columns
-export const columnsDb = {
-  async create(boardId, name, position) {
-    const result = await query(
-      'INSERT INTO columns (board_id, name, position) VALUES ($1, $2, $3) RETURNING *',
-      [boardId, name, position]
-    );
-    return result.rows[0];
-  },
-
-  async updatePositions(updates) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      for (const update of updates) {
-        await client.query(
-          'UPDATE columns SET position = $1 WHERE id = $2',
-          [update.position, update.id]
-        );
-      }
-      
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    constructor(db) {
+        this.db = db;
     }
-  }
-};
+
+    // Board operations
+    async getBoards() {
+        const boards = await this.db.all('SELECT * FROM boards');
+        return boards.map(board => ({
+            ...board,
+            columns: JSON.parse(board.columns)
+        }));
+    }
+
+    /**
+   * @param {string} id
+   */
+    async getBoard(id) {
+        const board = await this.db.get('SELECT * FROM boards WHERE id = ?', id);
+        return board ? {
+            ...board,
+            columns: JSON.parse(board.columns)
+        } : null;
+    }
+
+    /**
+   * @param {{ id: any; name: any; columns: any; }} board
+   */
+    async createBoard(board) {
+        await this.db.run(
+            'INSERT INTO boards (id, name, columns) VALUES (?, ?, ?)',
+            board.id,
+            board.name,
+            JSON.stringify(board.columns)
+        );
+    }
+
+    // Card operations
+    async getCards(boardId = null) {
+        const query = boardId 
+            ? 'SELECT c.*, GROUP_CONCAT(com.author || "|" || com.text || "|" || com.timestamp) as comments FROM cards c LEFT JOIN comments com ON c.id = com.cardId WHERE c.board = ? GROUP BY c.id'
+            : 'SELECT c.*, GROUP_CONCAT(com.author || "|" || com.text || "|" || com.timestamp) as comments FROM cards c LEFT JOIN comments com ON c.id = com.cardId GROUP BY c.id';
+        
+        const params = boardId ? [boardId] : [];
+        const cards = await this.db.all(query, ...params);
+        
+        return cards.map(card => ({
+            ...card,
+            tags: JSON.parse(card.tags || '[]'),
+            comments: this._parseComments(card.comments),
+            versions: [] // Versions will be loaded separately when needed
+        }));
+    }
+
+    /**
+   * @param {{ id: any; title: any; board: any; column: any; tags: any; dueDate: any; description: any; }} card
+   */
+    async createCard(card) {
+        await this.db.run(
+            'INSERT INTO cards (id, title, board, column, tags, dueDate, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            card.id,
+            card.title,
+            card.board,
+            card.column,
+            JSON.stringify(card.tags),
+            card.dueDate,
+            card.description
+        );
+    }
+
+    /**
+   * @param {{ title: any; board: any; column: any; tags: any; dueDate: any; description: any; id: any; }} card
+   */
+    async updateCard(card) {
+        await this.db.run(
+            'UPDATE cards SET title = ?, board = ?, column = ?, tags = ?, dueDate = ?, description = ? WHERE id = ?',
+            card.title,
+            card.board,
+            card.column,
+            JSON.stringify(card.tags),
+            card.dueDate,
+            card.description,
+            card.id
+        );
+    }
+
+    /**
+   * @param {any} cardId
+   */
+    async deleteCard(cardId) {
+        await this.db.run('DELETE FROM cards WHERE id = ?', cardId);
+    }
+
+    // Helper methods
+    /**
+   * @param {string} commentsString
+   */
+    _parseComments(commentsString) {
+        if (!commentsString) return [];
+        return commentsString.split(',').map(comment => {
+            const [author, text, timestamp] = comment.split('|');
+            return { author, text, timestamp };
+        });
+    }
+}
+
+// Create a singleton instance
+/**
+ * @type {KanbanDB | null}
+ */
+let dbInstance = null;
+
+export async function getDatabase() {
+    if (!dbInstance) {
+        const db = await initializeDB();
+        dbInstance = new KanbanDB(db);
+    }
+    return dbInstance;
+}
