@@ -4,13 +4,15 @@
 	import { socket } from '$lib/socket.js';
 	import Tags from 'svelte-tags-input';
 	import { goto } from '$app/navigation';
-	import type { Card, Comment } from '../../../types/cards';
+	import type { Card, Comment } from '../../../../types/card';
 	import markdownit from 'markdown-it';
+	import { onDestroy, onMount } from 'svelte';
+	import { get } from 'svelte/store';
 
 	const { boardId, cardId } = $page.params;
 	const md = markdownit();
 
-	let card: Card | null = $cards.find((c) => c.id === cardId) || null;
+	$: card = $cards.find((c) => c.id === cardId) || null;
 
 	let editingTitle = false;
 	let editingDescription = false;
@@ -35,6 +37,32 @@
 			});
 		}
 	}
+
+	onMount(() => {
+		if (socket) {
+			socket.on('cardUpdated', (updatedCard: Card) => {
+				if (updatedCard.board === boardId && card?.id === cardId) {
+					console.log('Updated');
+					cards.update((allCards) =>
+						allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
+					);
+				}
+			});
+			if (get(cards).length == 0) {
+				socket.emit('getCard',cardId);
+				socket.on('cardDataReceived', (newCard: Card) => {
+					cards.set([newCard]);	
+					socket.off('cardDataReceived');
+				});
+			}
+		}
+	});
+
+	onDestroy(() => {
+		if (socket) {
+			socket.off('cardUpdated');
+		}
+	});
 </script>
 
 {#if card}
@@ -64,11 +92,14 @@
 					</h2>
 				{/if}
 
-				<button class="text-gray-500 hover:text-gray-700" on:click={() => goto(`/${boardId}`)}>
+				<button
+					class="text-gray-500 hover:text-gray-700"
+					on:click={() => goto(`/boards/${boardId}`)}
+				>
 					✕
 				</button>
 			</div>
-            
+
 			<div class="mt-4">
 				{#if editingDescription}
 					<textarea
@@ -87,7 +118,10 @@
 						}}
 					/>
 				{:else}
-					<div class="cursor-pointer text-gray-700 markdown-content " on:click={() => (editingDescription = true)}>
+					<div
+						class="markdown-content cursor-pointer text-gray-700"
+						on:click={() => (editingDescription = true)}
+					>
 						{@html md.render(card.description) || '<p>No description</p>'}
 					</div>
 				{/if}

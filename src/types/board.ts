@@ -1,5 +1,5 @@
-export interface  Board {
-    id: string;
-    name: string;
-    columns: string[];
+export interface Board {
+	id: string;
+	name: string;
+	columns: string[];
 }

@@ -144,6 +144,14 @@ io.on('connection', async (socket) => {
         console.log(`User left board: ${boardId}`);
     });
 
+    socket.on('getCard', async (cardId) => {
+        try {
+            const card = await db.getCard(cardId);
+            socket.emit('cardDataReceived', card);
+        } catch (error) {
+            console.error('Error fetching card:', error);
+        }
+    });
 
 
 });

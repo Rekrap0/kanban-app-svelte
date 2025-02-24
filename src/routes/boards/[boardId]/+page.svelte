@@ -5,9 +5,9 @@
 	import { socket } from '$lib/socket.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import type { Card } from '../../types/cards';
-	import type { Board } from '../../types/board';
-	import { generateCardUUID } from '../../utils.js';
+	import type { Card } from '../../../types/card';
+	import type { Board } from '../../../types/board';
+	import { generateCardUUID } from '../../../utils.js';
 	import { scale } from 'svelte/transition';
 
 	const boardId = $page.params.boardId;
@@ -86,6 +86,8 @@
 			socket.emit('leaveBoard', boardId);
 			socket.off('cardUpdated');
 			socket.off('cardAdded');
+			socket.off('cardRemoved');
+			socket.off('boardUpdated');
 		}
 	});
 
@@ -129,7 +131,7 @@
 	}
 
 	function openCard(card: Card) {
-		goto(`/${boardId}/${card.id}`);
+		goto(`/boards/${boardId}/${card.id}`);
 	}
 
 	function createCard(column: string): void {
@@ -170,7 +172,7 @@
 
 <div class="min-h-screen bg-gray-100 p-6">
 	<div class="mb-8 flex items-center justify-between">
-		<a href="/" class="text-gray-600 hover:text-gray-800">← Back to Boards</a>
+		<a href="/boards/" class="text-gray-600 hover:text-gray-800">← Back to Boards</a>
 		<div class="relative">
 			<input
 				type="text"

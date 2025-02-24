@@ -2,8 +2,8 @@
 	import { socket } from '$lib/socket';
     import { boards, activeBoard } from '$lib/store.js';
 	import { onMount } from 'svelte';
-    import type { Board } from '../types/board';
-    import { generateBoardUUID } from '../utils.js';
+    import type { Board } from '../../types/board';
+    import { generateBoardUUID } from '../../utils.js';
 
     function selectBoard(boardId: string) {
         activeBoard.set(boardId);
@@ -22,7 +22,7 @@
 			socket.emit('fetchBoards');
 			socket.on('boardsFetched', (b: Board[]) => {
 				boards.set(b);
-                socket.off();
+                socket.off('boardsFetched');
 			});
 		}
 	});
@@ -34,7 +34,7 @@
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {#each $boards as board}
             <a
-                href="/{board.id}"
+                href="/boards/{board.id}"
                 class="block rounded-lg bg-white p-6 shadow-md transition-shadow hover:shadow-lg"
                 on:click={() => selectBoard(board.id)}
             >

@@ -125,6 +125,18 @@ export class KanbanDB {
     }
 
     /**
+   * @param {string} id
+   */
+        async getCard(id) {
+            const card = await this.db.get('SELECT * FROM cards WHERE id = ?', id);
+            return card ? {
+                ...card,
+                tags: JSON.parse(card.tags)
+            } : null;
+        }
+    
+
+    /**
    * @param {{ id: any; title: any; board: any; column: any; tags: any; dueDate: any; description: any; }} card
    */
     async createCard(card) {
