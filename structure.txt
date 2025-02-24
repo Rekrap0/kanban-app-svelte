@@ -13,11 +13,19 @@
 │   ├── app.d.ts
 │   ├── app.html
 │   ├── hooks.server.js
-│   ├── lib/
-│   ├── routes/
+│   ├── lib
+│   │   ├── db.js
+│   │   ├── index.js
+│   │   ├── socket.js
+│   │   └── store.js
+│   ├── routes
+│   │   ├── [boardId]
+│   │   │   ├── [cardId]
+│   │   │   │   └── +page.svelte
+│   │   │   └── +page.svelte
 │   │   ├── +layout.svelte
 │   │   └── +page.svelte
-│   └── types/
+│   └── types
 │       ├── board.ts
 │       └── cards.ts
 ├── static/

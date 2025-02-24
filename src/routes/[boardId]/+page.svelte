@@ -7,6 +7,7 @@
 	import { page } from '$app/stores';
 	import type { Card } from '../../types/cards';
 	import type { Board } from '../../types/board';
+	import { generateCardUUID } from '../../utils.js';
 	import { scale } from 'svelte/transition';
 
 	const boardId = $page.params.boardId;
@@ -133,7 +134,7 @@
 
 	function createCard(column: string): void {
 		const newCard: Card = {
-			id: crypto.randomUUID(),
+			id: generateCardUUID(),
 			title: 'New Card',
 			description: '',
 			board: boardId,

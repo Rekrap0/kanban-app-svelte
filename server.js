@@ -5,6 +5,7 @@ import { handler } from './build/handler.js';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import cors from 'cors';
+import { getDatabase } from './src/lib/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,28 +32,68 @@ app.use(cors({
     credentials: true
 }));
 
-// Serve static files from the 'public' directory
+// Serve static files
 app.use(express.static('public'));
-
-// Serve static files from the 'build' directory
 app.use(express.static(path.join(__dirname, 'build')));
 
+// Initialize database connection
+let db;
+(async () => {
+    db = await getDatabase();
+})();
+
 // Socket.IO connection handling
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log('A user connected');
 
     socket.on('disconnect', () => {
         console.log('User disconnected');
     });
 
-    socket.on('updateCard', (updatedCard, callback) => {
+    socket.on('fetchBoards', async (callback) => {
         try {
+            const boards = await db.getBoards();
+            socket.emit('boardsFetched', boards);
+            if (callback) callback(null, boards);
+        } catch (error) {
+            console.error('Error fetching boards:', error);
+            if (callback) callback(error);
+        }
+    });
+
+
+    socket.on('createBoard', async (board, callback) => {
+        try {
+            await db.createBoard(board);
+            console.log('Board created:', board);
+            
+            // socket.broadcast.emit('boardCreated', board);
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error creating board:', error);
+            if (callback) callback(error);
+        }
+    });
+
+    socket.on('updateBoard', async (board, callback) => {
+        try {
+            await db.updateBoard(board);
+            console.log('Board updated:', board);
+            
+            socket.broadcast.emit('boardUpdated', board);
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error updating board:', error);
+            if (callback) callback(error);
+        }
+    });
+
+    socket.on('updateCard', async (updatedCard, callback) => {
+        try {
+            await db.updateCard(updatedCard);
             console.log('Card updated:', updatedCard);
             
-            // Broadcast the update to all clients except the sender
             socket.broadcast.emit('cardUpdated', updatedCard);
-            
-            // Send success acknowledgment back to the client
             if (callback) callback();
         } catch (error) {
             console.error('Error updating card:', error);
@@ -60,52 +101,51 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('newCard', (newCard, callback) => {
+    socket.on('newCard', async (newCard, callback) => {
         try {
+            await db.createCard(newCard);
             console.log('Card created:', newCard);
             
-            // Broadcast the update to all clients except the sender
             socket.broadcast.emit('cardAdded', newCard);
-            
-            // Send success acknowledgment back to the client
             if (callback) callback();
         } catch (error) {
-            console.error('Error updating card:', error);
+            console.error('Error creating card:', error);
             if (callback) callback(error);
         }
     });
 
-    socket.on('deleteCard', (removedCard, callback) => {
+    socket.on('deleteCard', async (removedCard, callback) => {
         try {
+            await db.deleteCard(removedCard.id);
             console.log('Card removed:', removedCard);
             
-            // Broadcast the update to all clients except the sender
             socket.broadcast.emit('cardRemoved', removedCard);
-            
-            // Send success acknowledgment back to the client
             if (callback) callback();
         } catch (error) {
-            console.error('Error updating card:', error);
+            console.error('Error deleting card:', error);
             if (callback) callback(error);
         }
     });
 
-
-    // Handle joining specific board rooms
-    socket.on('joinBoard', (boardId) => {
+    socket.on('joinBoard', async (boardId) => {
         socket.join(`board-${boardId}`);
+        try {
+            const board = await db.getBoard(boardId);
+            const cards = await db.getCards(boardId);
+            socket.emit('boardDataReceived', board, cards);
+        } catch (error) {
+            console.error('Error fetching board:', error);
+        }
         console.log(`User joined board: ${boardId}`);
     });
 
-    // Handle leaving board rooms
     socket.on('leaveBoard', (boardId) => {
         socket.leave(`board-${boardId}`);
         console.log(`User left board: ${boardId}`);
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
-    });
+
+
 });
 
 // Handle SvelteKit SSR
@@ -116,7 +156,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
-// Use server.listen instead of app.listen for Socket.IO
+// Start server
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

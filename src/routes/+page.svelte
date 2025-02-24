@@ -3,6 +3,7 @@
     import { boards, activeBoard } from '$lib/store.js';
 	import { onMount } from 'svelte';
     import type { Board } from '../types/board';
+    import { generateBoardUUID } from '../utils.js';
 
     function selectBoard(boardId: string) {
         activeBoard.set(boardId);
@@ -48,7 +49,7 @@
         class="mt-6 rounded-md bg-blue-500 px-4 py-2 font-medium text-white hover:bg-blue-600"
         on:click={() => {
             const newBoard: Board = {
-                id: crypto.randomUUID(),
+                id: generateBoardUUID(),
                 name: 'New Board',
                 columns: ['todo', 'in_progress', 'done']
             };
