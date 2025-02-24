@@ -9,22 +9,25 @@
 	import type { Board } from '../../../types/board';
 	import { generateCardUUID } from '../../../utils.js';
 	import { scale } from 'svelte/transition';
+	import SearchBar from '$lib/components/SearchBar.svelte';
 
 	const boardId = $page.params.boardId;
 	activeBoard.set(boardId);
 	let editingTitle = false;
 	let isDragging = false;
+	let loaded = false;
 	let searchQuery = '';
 	let columnCards: { [key: string]: Card[] } = {};
 	$: currentBoard = $boards.find((b: Board) => b.id === boardId);
 
 	// Filter cards based on search query
 	$: filteredCards = searchQuery
-		? $cards.filter((card) =>
-				card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				card.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				card.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-		  )
+		? $cards.filter(
+				(card) =>
+					card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					card.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					card.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+			)
 		: $cards;
 
 	// Update columnCards whenever filtered cards or boardId changes
@@ -53,6 +56,7 @@
 				boards.set([b]);
 				cards.set(c);
 				socket.off('boardDataReceived');
+				loaded = true;
 			});
 			socket.on('cardUpdated', (updatedCard: Card) => {
 				if (updatedCard.board === boardId) {
@@ -84,10 +88,7 @@
 	onDestroy(() => {
 		if (socket) {
 			socket.emit('leaveBoard', boardId);
-			socket.off('cardUpdated');
-			socket.off('cardAdded');
-			socket.off('cardRemoved');
-			socket.off('boardUpdated');
+			socket.off();
 		}
 	});
 
@@ -173,39 +174,26 @@
 <div class="min-h-screen bg-gray-100 p-6">
 	<div class="mb-8 flex items-center justify-between">
 		<a href="/boards/" class="text-gray-600 hover:text-gray-800">← Back to Boards</a>
-		<div class="relative">
-			<input
-				type="text"
-				bind:value={searchQuery}
-				placeholder="Search cards..."
-				class="rounded-lg border border-gray-300 px-4 py-2 pr-10 focus:border-blue-500 focus:outline-none"
-			/>
-			<svg
-				class="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-gray-400"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-				/>
-			</svg>
-		</div>
 	</div>
-
 	<div class="mb-8 flex items-center justify-between">
 		{#if !isDragging}
 			{#if currentBoard}
 				{#if !editingTitle}
-					<h1
-						class="flex h-20 w-full items-center text-3xl font-bold text-gray-800"
-						on:click={() => (editingTitle = true)}
-					>
-						{currentBoard.name}
-					</h1>
+					{#if currentBoard.name.trim().length > 0}
+						<h1
+							class="flex h-20 w-full items-center text-3xl font-bold text-gray-800"
+							on:click={() => (editingTitle = true)}
+						>
+							{currentBoard.name}
+						</h1>
+					{:else}
+						<h1
+							class="flex h-20 w-full items-center text-3xl font-bold text-stone-500"
+							on:click={() => (editingTitle = true)}
+						>
+							Untitled Kanban board
+						</h1>
+					{/if}
 				{:else}
 					<input
 						autofocus
@@ -237,8 +225,8 @@
 			</div>
 		{/if}
 	</div>
-
 	{#if currentBoard}
+		<SearchBar bind:searchQuery />
 		<div class="flex gap-6 overflow-x-auto pb-4">
 			{#each currentBoard.columns as column}
 				<div class="flex h-full min-w-[300px] flex-col rounded-lg bg-gray-200 p-4">
@@ -294,7 +282,13 @@
 				</div>
 			{/each}
 		</div>
+	{:else if !loaded}
+		<div class="flex min-h-screen items-center justify-center bg-gray-100">
+			<p class="text-gray-600">Loading</p>
+		</div>
 	{:else}
-		<p class="text-gray-600">Board not found</p>
+		<div class="flex min-h-screen items-center justify-center bg-gray-100">
+			<p class="text-gray-600">Board not found</p>
+		</div>
 	{/if}
 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { socket } from '$lib/socket';
     import { boards, activeBoard } from '$lib/store.js';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
     import type { Board } from '../../types/board';
     import { generateBoardUUID } from '../../utils.js';
     import NavBar from '$lib/components/NavBar.svelte';
@@ -26,6 +26,10 @@
                 socket.off('boardsFetched');
 			});
 		}
+	});
+
+    onDestroy(() => {
+		socket.off();
 	});
 </script>
 

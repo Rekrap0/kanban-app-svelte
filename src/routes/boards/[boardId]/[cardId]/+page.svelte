@@ -13,7 +13,7 @@
 	const md = markdownit();
 
 	$: card = $cards.find((c) => c.id === cardId) || null;
-
+	let loaded = false;
 	let editingTitle = false;
 	let editingDescription = false;
 	let editingDueDate = false;
@@ -49,10 +49,11 @@
 				}
 			});
 			if (get(cards).length == 0) {
-				socket.emit('getCard',cardId);
+				socket.emit('getCard', cardId);
 				socket.on('cardDataReceived', (newCard: Card) => {
-					cards.set([newCard]);	
+					cards.set([newCard]);
 					socket.off('cardDataReceived');
+					loaded = true;
 				});
 			}
 		}
@@ -60,7 +61,7 @@
 
 	onDestroy(() => {
 		if (socket) {
-			socket.off('cardUpdated');
+			socket.off();
 		}
 	});
 </script>
@@ -86,9 +87,16 @@
 							}
 						}}
 					/>
-				{:else}
+				{:else if card.title && card.title.trim().length > 0}
 					<h2 class="cursor-pointer text-2xl font-bold" on:click={() => (editingTitle = true)}>
 						{card.title}
+					</h2>
+				{:else}
+					<h2
+						class="cursor-pointer text-2xl font-bold text-stone-500"
+						on:click={() => (editingTitle = true)}
+					>
+						(No title)
 					</h2>
 				{/if}
 
@@ -122,7 +130,8 @@
 						class="markdown-content cursor-pointer text-gray-700"
 						on:click={() => (editingDescription = true)}
 					>
-						{@html md.render(card.description) || '<p>No description</p>'}
+						{@html md.render(card.description) ||
+							'<span class="italic text-stone-500 ">Click to add description</span>'}
 					</div>
 				{/if}
 
@@ -143,20 +152,20 @@
 						<p class="inline-block cursor-pointer" on:click={() => (editingDueDate = true)}>
 							{#if card.dueDate}
 								{new Date(card.dueDate).toLocaleDateString()}
+								<button
+									class="ml-2 inline-block underline"
+									on:click={() => {
+										card.dueDate = '';
+										updateCard(card);
+									}}
+								>
+									Clear
+								</button>
 							{:else}
 								<span class="text-stone-500 italic">Click to set due date</span>
 							{/if}
 						</p>
 					{/if}
-					<button
-						class="ml-2 inline-block underline"
-						on:click={() => {
-							card.dueDate = '';
-							updateCard(card);
-						}}
-					>
-						Clear
-					</button>
 				</div>
 
 				<div class="mt-4">
@@ -201,6 +210,10 @@
 				</div>
 			</div>
 		</div>
+	</div>
+{:else if !loaded}
+	<div class="flex min-h-screen items-center justify-center bg-gray-100">
+		<p class="text-gray-600">Loading</p>
 	</div>
 {:else}
 	<div class="flex min-h-screen items-center justify-center bg-gray-100">

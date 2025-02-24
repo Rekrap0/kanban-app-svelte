@@ -153,6 +153,51 @@ io.on('connection', async (socket) => {
         }
     });
 
+    socket.on('fetchNotes', async (callback) => {
+        try {
+            const notes = await db.getNotes();
+            socket.emit('notesFetched', notes);
+            if (callback) callback(null, notes);
+        } catch (error) {
+            console.error('Error fetching card:', error);
+            if (callback) callback(error);
+        }
+    });
+
+    socket.on('createNote', async (newNote, callback) => {
+        try {
+            await db.createNote(newNote);
+            console.log('Note created:', newNote);
+            
+            socket.broadcast.emit('noteAdded', newNote);
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error creating note:', error);
+            if (callback) callback(error);
+        }
+    });
+
+    socket.on('getNote', async (noteId) => {
+        try {
+            const note = await db.getNote(noteId);
+            socket.emit('noteDataReceived', note);
+        } catch (error) {
+            console.error('Error fetching note:', error);
+        }
+    });
+
+    socket.on('updateNote', async (updateNote, callback) => {
+        try {
+            await db.updateNote(updateNote);
+            console.log('Note updated:', updateNote);
+            
+            socket.broadcast.emit('noteUpdated', updateNote);
+            if (callback) callback();
+        } catch (error) {
+            console.error('Error updating note:', error);
+            if (callback) callback(error);
+        }
+    });
 
 });
 
