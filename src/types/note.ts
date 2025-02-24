@@ -3,5 +3,6 @@ export interface Note {
 	title: string;
 	tags: string[];
 	description: string;
+  modifiedAt: string;
 	versions: any[];
 }

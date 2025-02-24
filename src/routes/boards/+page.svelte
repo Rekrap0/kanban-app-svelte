@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
     import type { Board } from '../../types/board';
     import { generateBoardUUID } from '../../utils.js';
+    import NavBar from '$lib/components/NavBar.svelte';
 
     function selectBoard(boardId: string) {
         activeBoard.set(boardId);
@@ -29,7 +30,7 @@
 </script>
 
 <div class="min-h-screen bg-gray-100 p-6">
-    <h1 class="mb-8 text-3xl font-bold text-gray-800">My Boards</h1>
+    <NavBar/>
 
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {#each $boards as board}

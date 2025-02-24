@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import Tags from 'svelte-tags-input';
 	import { notes } from '$lib/store.js';
 	import { socket } from '$lib/socket.js';
 	import { goto } from '$app/navigation';
@@ -35,7 +36,7 @@
 
 {#if note}
 	<div class="min-h-screen bg-gray-100 p-6">
-		<div class="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-lg">
+		<div class="h-full w-full rounded-lg bg-white p-6 shadow-lg">
 			<div class="flex items-start justify-between">
 				{#if editingTitle}
 					<input
@@ -64,13 +65,20 @@
 					✕
 				</button>
 			</div>
-
 			<div class="mt-4">
-				{#if editingDescription}
+				<Tags
+					bind:tags={note.tags}
+					onTagAdded={() => updateNote(note)}
+					onTagRemoved={() => updateNote(note)}
+				/>
+			</div>
+
+			{#if editingDescription}
+				<div class="h-[70vh] mt-4 flex flex-col">
 					<textarea
 						autofocus
 						bind:value={note.description}
-						class="w-full rounded border p-1"
+						class="h-full w-full flex-1 rounded border p-1"
 						on:focusout={() => {
 							resetEditingState();
 							updateNote(note);
@@ -82,15 +90,17 @@
 							}
 						}}
 					/>
-				{:else}
+				</div>
+			{:else}
+				<div class="mt-4 flex h-min-[70vh] flex-col">
 					<div
 						class="markdown-content cursor-pointer text-gray-700"
 						on:click={() => (editingDescription = true)}
 					>
-						{@html md.render(note.description) || '<p>No description</p>'}
+						{@html md.render(note.description) || '<p>Click to start typing...</p>'}
 					</div>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		</div>
 	</div>
 {:else}

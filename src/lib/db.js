@@ -48,6 +48,22 @@ export async function initializeDB() {
             timestamp TEXT NOT NULL,
             FOREIGN KEY (cardId) REFERENCES cards(id)
         );
+
+        CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            tags TEXT,
+            description TEXT,
+            modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS note_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            noteId TEXT NOT NULL,
+            data TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (noteId) REFERENCES notes(id)
+        );
     `);
 
     return db;
@@ -113,6 +129,9 @@ export class KanbanDB {
             ? 'SELECT c.*, GROUP_CONCAT(com.author || "|" || com.text || "|" || com.timestamp) as comments FROM cards c LEFT JOIN comments com ON c.id = com.cardId WHERE c.board = ? GROUP BY c.id'
             : 'SELECT c.*, GROUP_CONCAT(com.author || "|" || com.text || "|" || com.timestamp) as comments FROM cards c LEFT JOIN comments com ON c.id = com.cardId GROUP BY c.id';
         
+        /**
+         * @type {string[]}
+         */
         const params = boardId ? [boardId] : [];
         const cards = await this.db.all(query, ...params);
         
@@ -174,6 +193,87 @@ export class KanbanDB {
     async deleteCard(cardId) {
         await this.db.run('DELETE FROM cards WHERE id = ?', cardId);
     }
+
+    // Note operations
+    /**
+     * @returns {Promise<Array<{id: string, title: string, tags: string[], description: string, versions: any[]}>>}
+     */
+    async getNotes() {
+        const notes = await this.db.all('SELECT * FROM notes');
+        return notes.map(note => ({
+            ...note,
+            tags: JSON.parse(note.tags || '[]'),
+            versions: [] // Versions will be loaded separately when needed
+        }));
+    }
+
+    /**
+     * @param {string} id
+     */
+    async getNote(id) {
+        const note = await this.db.get('SELECT * FROM notes WHERE id = ?', id);
+        if (!note) return null;
+
+        // Get versions
+        const versions = await this.db.all(
+            'SELECT * FROM note_versions WHERE noteId = ? ORDER BY timestamp DESC',
+            id
+        );
+
+        return {
+            ...note,
+            tags: JSON.parse(note.tags || '[]'),
+            versions: versions.map(v => JSON.parse(v.data))
+        };
+    }
+
+    /**
+     * @param {{ id: string, title: string, tags: string[], description: string }} note
+     */
+    async createNote(note) {
+        await this.db.run(
+            'INSERT INTO notes (id, title, tags, description) VALUES (?, ?, ?, ?)',
+            note.id,
+            note.title,
+            JSON.stringify(note.tags),
+            note.description
+        );
+    }
+
+    /**
+     * @param {{ id: string, title: string, tags: string[], description: string }} note
+     */
+    async updateNote(note) {
+        // First, get the current version of the note
+        const currentNote = await this.getNote(note.id);
+        if (currentNote) {
+            // Save the current version to note_versions
+            await this.db.run(
+                'INSERT INTO note_versions (noteId, data, timestamp) VALUES (?, ?, ?)',
+                note.id,
+                JSON.stringify(currentNote),
+                new Date().toISOString()
+            );
+        }
+
+        // Update the note
+        await this.db.run(
+            'UPDATE notes SET title = ?, tags = ?, description = ? WHERE id = ?',
+            note.title,
+            JSON.stringify(note.tags),
+            note.description,
+            note.id
+        );
+    }
+
+    /**
+     * @param {string} noteId
+     */
+    async deleteNote(noteId) {
+        await this.db.run('DELETE FROM note_versions WHERE noteId = ?', noteId);
+        await this.db.run('DELETE FROM notes WHERE id = ?', noteId);
+    }
+    
 
     // Helper methods
     /**

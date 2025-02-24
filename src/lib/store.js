@@ -16,6 +16,7 @@ export const notes = writable([{
     title: 'How to design a Note system',
     tags: ['Design', 'develop', 'notes'],
     description: '## Target\n1. View note rapidly\n2. Support markdowns\n3. Unique URL',
+    modifiedAt: "",
     versions:[]
   }]);
 export const activeBoard = writable('');
