@@ -10,7 +10,9 @@
 	import { get } from 'svelte/store';
 
 	const { boardId, cardId } = $page.params;
-	const md = markdownit();
+	const md = markdownit({
+		breaks: true
+	});
 
 	$: card = $cards.find((c) => c.id === cardId) || null;
 	let loaded = false;
