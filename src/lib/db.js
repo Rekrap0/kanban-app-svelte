@@ -94,6 +94,19 @@ export class KanbanDB {
         );
     }
 
+    /**
+   * @param {{ id: any; name: any; columns: any; }} board
+   */
+    async updateBoard(board) {
+        await this.db.run(
+            'UPDATE boards SET name = ?, columns = ? WHERE id = ?',
+            board.name,
+            JSON.stringify(board.columns),
+            board.id
+        );
+    }
+
+
     // Card operations
     async getCards(boardId = null) {
         const query = boardId 

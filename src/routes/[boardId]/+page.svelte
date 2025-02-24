@@ -39,13 +39,11 @@
 			socket.on('boardDataReceived', (b: Board, c: Card[]) => {
 				boards.set([b]);
 				cards.set(c);
-				console.log("Received");
-				console.log(b);
-				console.log(c);
-                socket.off();
+				socket.off('boardDataReceived');
 			});
 			socket.on('cardUpdated', (updatedCard: Card) => {
 				if (updatedCard.board === boardId) {
+					console.log('Updated');
 					cards.update((allCards) =>
 						allCards.map((card) => (card.id === updatedCard.id ? updatedCard : card))
 					);
@@ -53,12 +51,18 @@
 			});
 			socket.on('cardAdded', (newCard: Card) => {
 				if (newCard.board === boardId) {
+					console.log('Added');
 					cards.update((allCards) => [...allCards, newCard]);
 				}
 			});
 			socket.on('cardRemoved', (removedCard: Card) => {
 				if (removedCard.board === boardId) {
 					cards.update((allCards) => allCards.filter((c) => c.id !== removedCard.id));
+				}
+			});
+			socket.on('boardUpdated', (board: Board) => {
+				if (board.id == currentBoard?.id) {
+					boards.update((allBoards) => allBoards.map((b) => (b.id === board.id ? board : b)));
 				}
 			});
 		}
@@ -139,15 +143,16 @@
 	function deleteCard(deletedCard: Card): void {
 		cards.update((allCards) => allCards.filter((c) => c.id !== deletedCard.id));
 		if (socket?.connected) {
-			if (socket?.connected) {
-				socket.emit('deleteCard', deletedCard);
-			}
+			socket.emit('deleteCard', deletedCard);
 		}
 	}
 
-
-
-
+	function updateBoard() {
+		editingTitle = false;
+		if (socket?.connected) {
+			socket.emit('updateBoard', currentBoard);
+		}
+	}
 </script>
 
 <div class="min-h-screen bg-gray-100 p-6">
@@ -156,7 +161,10 @@
 		{#if !isDragging}
 			{#if currentBoard}
 				{#if !editingTitle}
-					<h1 class="flex h-20 items-center text-3xl font-bold text-gray-800" on:click={() => (editingTitle = true)}>
+					<h1
+						class="flex h-20 w-full items-center text-3xl font-bold text-gray-800"
+						on:click={() => (editingTitle = true)}
+					>
 						{currentBoard.name}
 					</h1>
 				{:else}
@@ -164,13 +172,13 @@
 						autofocus
 						type="text"
 						bind:value={currentBoard.name}
-						class="rounded flex h-20 items-center text-3xl font-bold text-gray-800"
+						class="flex h-20 w-full items-center rounded text-3xl font-bold text-gray-800"
 						on:focusout={() => {
-							editingTitle = false;
+							updateBoard();
 						}}
 						on:keydown={(e) => {
 							if (e.key === 'Enter') {
-								editingTitle = false;
+								updateBoard();
 							}
 						}}
 					/>
